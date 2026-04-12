@@ -1,0 +1,59 @@
+---
+# roles/pools/tasks/main.yml
+# Create (or delete) a Proxmox resource pool and configure permissions.
+#
+# Expected variables:
+#   student_id   – integer student identifier
+#   state        – "present" (default) or "absent"
+
+- name: "Set pool facts for student{{ student_id }}"
+  ansible.builtin.set_fact:
+    student_name: "student{{ student_id }}"
+    pve_user: "student{{ student_id }}@pve"
+    pool_name: "student{{ student_id }}"
+
+# ---- Create pool ----
+- name: "Check if pool {{ pool_name }} exists"
+  ansible.builtin.command:
+    cmd: pveum pool list --output-format json
+  register: pool_list
+  changed_when: false
+  when: state | default('present') == 'present'
+
+- name: "Create resource pool {{ pool_name }}"
+  ansible.builtin.command:
+    cmd: >
+      pveum pool add {{ pool_name }}
+      --comment "Lab pool for {{ student_name }}"
+  when:
+    - state | default('present') == 'present'
+    - pool_name not in (pool_list.stdout | default(''))
+  changed_when: true
+
+- name: "Grant {{ student_role }} on /pool/{{ pool_name }} to {{ pve_user }}"
+  ansible.builtin.command:
+    cmd: >
+      pveum aclmod /pool/{{ pool_name }}
+      --users {{ pve_user }}
+      --roles {{ student_role }}
+  when: state | default('present') == 'present'
+  changed_when: true
+
+# ---- Delete pool ----
+- name: "Remove ACL for {{ pve_user }} on /pool/{{ pool_name }}"
+  ansible.builtin.command:
+    cmd: >
+      pveum aclmod /pool/{{ pool_name }}
+      --users {{ pve_user }}
+      --roles {{ student_role }}
+      --delete 1
+  when: state | default('present') == 'absent'
+  failed_when: false
+  changed_when: true
+
+- name: "Delete resource pool {{ pool_name }}"
+  ansible.builtin.command:
+    cmd: pveum pool delete {{ pool_name }}
+  when: state | default('present') == 'absent'
+  failed_when: false
+  changed_when: true

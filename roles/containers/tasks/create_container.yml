@@ -1,0 +1,40 @@
+---
+# roles/containers/tasks/create_container.yml
+# Creates a single LXC container for the current ct_index.
+# Called in a loop from main.yml.
+
+- name: "Set facts for container index {{ ct_index }}"
+  ansible.builtin.set_fact:
+    ct_id: "{{ base_ct_id | int + student_id | int * 10 + ct_index | int }}"
+    ct_name: "student{{ student_id }}-ct{{ ct_index }}"
+
+- name: "Check if container {{ ct_id }} already exists"
+  ansible.builtin.command:
+    cmd: pct status {{ ct_id }}
+  register: ct_status
+  failed_when: false
+  changed_when: false
+
+- name: "Clone LXC container from template {{ ct_template_id }} → {{ ct_id }}"
+  ansible.builtin.command:
+    cmd: >
+      pct clone {{ ct_template_id }} {{ ct_id }}
+      --hostname {{ ct_name }}
+      --storage {{ ct_storage }}
+      --full 1
+  when: ct_status.rc != 0   # rc != 0 means the container does not exist
+  changed_when: true
+
+- name: "Configure network on container {{ ct_id }}"
+  ansible.builtin.command:
+    cmd: >
+      pct set {{ ct_id }}
+      --net0 name=eth0,bridge={{ lan_bridge }},ip=dhcp
+  when: ct_status.rc != 0
+  changed_when: true
+
+- name: "Add container {{ ct_id }} to pool {{ pool_name }}"
+  ansible.builtin.command:
+    cmd: pct set {{ ct_id }} --pool {{ pool_name }}
+  when: ct_status.rc != 0
+  changed_when: true

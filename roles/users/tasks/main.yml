@@ -1,0 +1,39 @@
+---
+# roles/users/tasks/main.yml
+# Create (or delete, when state=absent) a Proxmox user account.
+#
+# Expected variables (set by the calling playbook):
+#   student_id   – integer student identifier
+#   state        – "present" (default) or "absent"
+
+- name: "Set user facts for student{{ student_id }}"
+  ansible.builtin.set_fact:
+    student_name: "student{{ student_id }}"
+    pve_user: "student{{ student_id }}@pve"
+
+# ---- Create user ----
+- name: "Check if user {{ pve_user }} exists"
+  ansible.builtin.command:
+    cmd: pveum user list --output-format json
+  register: pve_user_list
+  changed_when: false
+  when: state | default('present') == 'present'
+
+- name: "Create Proxmox user {{ pve_user }}"
+  ansible.builtin.command:
+    cmd: >
+      pveum user add {{ pve_user }}
+      --password {{ student_name }}
+      --comment "Student {{ student_id }} lab account"
+  when:
+    - state | default('present') == 'present'
+    - pve_user not in (pve_user_list.stdout | default(''))
+  changed_when: true
+
+# ---- Delete user ----
+- name: "Delete Proxmox user {{ pve_user }}"
+  ansible.builtin.command:
+    cmd: pveum user delete {{ pve_user }}
+  when: state | default('present') == 'absent'
+  failed_when: false   # Ignore errors if user does not exist
+  changed_when: true

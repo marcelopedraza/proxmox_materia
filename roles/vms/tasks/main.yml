@@ -1,0 +1,71 @@
+---
+# roles/vms/tasks/main.yml
+# Clone (or destroy) the pfSense VM for a student from the shared template.
+#
+# Expected variables:
+#   student_id      – integer student identifier
+#   state           – "present" (default) or "absent"
+# Uses group_vars: vm_template_id, base_vm_id, vm_storage, wan_bridge,
+#                  student_role (from pools role)
+
+- name: "Set VM facts for student{{ student_id }}"
+  ansible.builtin.set_fact:
+    vm_id: "{{ base_vm_id | int + student_id | int }}"
+    vm_name: "student{{ student_id }}-pfsense"
+    pool_name: "student{{ student_id }}"
+    lan_bridge: "vmbr10{{ student_id }}"
+
+# ---- Create VM ----
+- name: "Check if VM {{ vm_id }} already exists"
+  ansible.builtin.command:
+    cmd: qm status {{ vm_id }}
+  register: vm_status
+  failed_when: false
+  changed_when: false
+  when: state | default('present') == 'present'
+
+- name: "Clone pfSense VM from template {{ vm_template_id }} → {{ vm_id }}"
+  ansible.builtin.command:
+    cmd: >
+      qm clone {{ vm_template_id }} {{ vm_id }}
+      --name {{ vm_name }}
+      --full 1
+      --storage {{ vm_storage }}
+  when:
+    - state | default('present') == 'present'
+    - vm_status.rc != 0   # rc != 0 means the VM does not exist yet
+  changed_when: true
+
+- name: "Configure network interfaces on VM {{ vm_id }}"
+  ansible.builtin.command:
+    cmd: >
+      qm set {{ vm_id }}
+      --net0 virtio,bridge={{ wan_bridge }}
+      --net1 virtio,bridge={{ lan_bridge }}
+  when:
+    - state | default('present') == 'present'
+    - vm_status.rc != 0
+  changed_when: true
+
+- name: "Add VM {{ vm_id }} to pool {{ pool_name }}"
+  ansible.builtin.command:
+    cmd: qm set {{ vm_id }} --pool {{ pool_name }}
+  when:
+    - state | default('present') == 'present'
+    - vm_status.rc != 0
+  changed_when: true
+
+# ---- Delete VM ----
+- name: "Stop VM {{ vm_id }} if running"
+  ansible.builtin.command:
+    cmd: qm stop {{ vm_id }}
+  when: state | default('present') == 'absent'
+  failed_when: false
+  changed_when: true
+
+- name: "Destroy VM {{ vm_id }}"
+  ansible.builtin.command:
+    cmd: qm destroy {{ vm_id }} --purge 1
+  when: state | default('present') == 'absent'
+  failed_when: false
+  changed_when: true

@@ -1,0 +1,21 @@
+---
+# roles/containers/tasks/destroy_container.yml
+# Stops and destroys a single LXC container for the current ct_index.
+# Called in a loop from main.yml.
+
+- name: "Set facts for container index {{ ct_index }}"
+  ansible.builtin.set_fact:
+    ct_id: "{{ base_ct_id | int + student_id | int * 10 + ct_index | int }}"
+    ct_name: "student{{ student_id }}-ct{{ ct_index }}"
+
+- name: "Stop container {{ ct_id }} if running"
+  ansible.builtin.command:
+    cmd: pct stop {{ ct_id }}
+  failed_when: false
+  changed_when: true
+
+- name: "Destroy container {{ ct_id }}"
+  ansible.builtin.command:
+    cmd: pct destroy {{ ct_id }} --purge 1
+  failed_when: false
+  changed_when: true

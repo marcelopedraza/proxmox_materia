@@ -1,0 +1,22 @@
+---
+# playbooks/tasks/user_and_pool.yml
+# Helper task file included by deploy.yml and destroy.yml.
+# Creates or removes a user + pool for a single student (cluster-wide).
+#
+# Expected variables:
+#   student_id – integer
+#   state      – "present" or "absent"
+
+- name: "Include users role for student{{ student_id }}"
+  ansible.builtin.include_role:
+    name: users
+  vars:
+    student_id: "{{ student_id }}"
+    state: "{{ state }}"
+
+- name: "Include pools role for student{{ student_id }}"
+  ansible.builtin.include_role:
+    name: pools
+  vars:
+    student_id: "{{ student_id }}"
+    state: "{{ state }}"

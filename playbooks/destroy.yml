@@ -1,0 +1,88 @@
+---
+# playbooks/destroy.yml
+# Tear down lab environments for all students across the 6 Proxmox nodes.
+#
+# Usage:
+#   # Destroy all student environments
+#   ansible-playbook -i inventory.ini playbooks/destroy.yml
+#
+#   # Destroy a single student's environment
+#   ansible-playbook -i inventory.ini playbooks/destroy.yml \
+#     -e "student_id_start=5 num_students=1"
+#
+# WARNING: This permanently deletes all VMs, containers, users, pools, and
+#          bridges for the affected students. There is no undo.
+#
+# Architecture (reverse order from deploy.yml):
+#   Play 1 – Remove node-local resources (containers, VMs, bridges).
+#   Play 2 – Remove cluster-wide resources (users, pools).
+
+# ---------------------------------------------------------------------------
+# Play 1: Remove per-node resources (containers, VMs, networking)
+# ---------------------------------------------------------------------------
+- name: "Destroy per-node resources (containers, VMs, networking)"
+  hosts: proxmox_nodes
+  gather_facts: false
+  vars:
+    state: absent
+
+  tasks:
+    - name: "Compute student list for {{ inventory_hostname }} (node_index={{ node_index }})"
+      ansible.builtin.set_fact:
+        my_students: >-
+          {%- set result = [] -%}
+          {%- for sid in range(student_id_start | int,
+                               student_id_start | int + num_students | int) -%}
+            {%- if sid % (num_nodes | int) == (node_index | int) -%}
+              {%- set _ = result.append(sid) -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {{ result }}
+
+    - name: "Students being destroyed on {{ inventory_hostname }}: {{ my_students }}"
+      ansible.builtin.debug:
+        var: my_students
+
+    - name: "Destroy LXC containers for each student on {{ inventory_hostname }}"
+      ansible.builtin.include_role:
+        name: containers
+      vars:
+        student_id: "{{ item }}"
+        state: absent
+      loop: "{{ my_students }}"
+
+    - name: "Destroy pfSense VM for each student on {{ inventory_hostname }}"
+      ansible.builtin.include_role:
+        name: vms
+      vars:
+        student_id: "{{ item }}"
+        state: absent
+      loop: "{{ my_students }}"
+
+    - name: "Remove LAN bridge for each student on {{ inventory_hostname }}"
+      ansible.builtin.include_role:
+        name: networking
+      vars:
+        student_id: "{{ item }}"
+        state: absent
+      loop: "{{ my_students }}"
+
+# ---------------------------------------------------------------------------
+# Play 2: Remove cluster-wide resources (users, pools) – run on pve1 only
+# ---------------------------------------------------------------------------
+- name: "Destroy student users and resource pools"
+  hosts: pve1
+  gather_facts: false
+  vars:
+    state: absent
+
+  tasks:
+    - name: "Remove user and pool for each student"
+      ansible.builtin.include_tasks: tasks/user_and_pool.yml
+      vars:
+        student_id: "{{ item }}"
+      loop: >-
+        {{
+          range(student_id_start | int,
+                student_id_start | int + num_students | int) | list
+        }}

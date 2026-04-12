@@ -1,0 +1,89 @@
+---
+# playbooks/deploy.yml
+# Provision lab environments for all students across the 6 Proxmox nodes.
+#
+# Usage:
+#   # Deploy all students
+#   ansible-playbook -i inventory.ini playbooks/deploy.yml
+#
+#   # Deploy a single student (overriding vars)
+#   ansible-playbook -i inventory.ini playbooks/deploy.yml \
+#     -e "student_id_start=5 num_students=1"
+#
+# Architecture:
+#   Play 1 – Cluster-wide operations (users + pools).
+#             Run on pve1 only; Proxmox replicates these objects cluster-wide.
+#   Play 2 – Node-local operations (networking, VMs, containers).
+#             Each node processes only the students assigned to it:
+#               node_index = student_id % num_nodes
+
+# ---------------------------------------------------------------------------
+# Play 1: Create Proxmox users and resource pools (cluster-wide, run on pve1)
+# ---------------------------------------------------------------------------
+- name: "Create student users and resource pools"
+  hosts: pve1
+  gather_facts: false
+  vars:
+    state: present
+
+  tasks:
+    - name: "Create user and pool for each student"
+      ansible.builtin.include_tasks: tasks/user_and_pool.yml
+      vars:
+        student_id: "{{ item }}"
+      loop: >-
+        {{
+          range(student_id_start | int,
+                student_id_start | int + num_students | int) | list
+        }}
+
+# ---------------------------------------------------------------------------
+# Play 2: Create bridges, VMs, and containers on each node
+# ---------------------------------------------------------------------------
+- name: "Create per-node resources (networking, VMs, containers)"
+  hosts: proxmox_nodes
+  gather_facts: false
+  vars:
+    state: present
+
+  tasks:
+    # Compute the list of student IDs whose node_index matches this host.
+    - name: "Compute student list for {{ inventory_hostname }} (node_index={{ node_index }})"
+      ansible.builtin.set_fact:
+        my_students: >-
+          {%- set result = [] -%}
+          {%- for sid in range(student_id_start | int,
+                               student_id_start | int + num_students | int) -%}
+            {%- if sid % (num_nodes | int) == (node_index | int) -%}
+              {%- set _ = result.append(sid) -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {{ result }}
+
+    - name: "Students assigned to {{ inventory_hostname }}: {{ my_students }}"
+      ansible.builtin.debug:
+        var: my_students
+
+    - name: "Create LAN bridge for each student on {{ inventory_hostname }}"
+      ansible.builtin.include_role:
+        name: networking
+      vars:
+        student_id: "{{ item }}"
+        state: present
+      loop: "{{ my_students }}"
+
+    - name: "Clone pfSense VM for each student on {{ inventory_hostname }}"
+      ansible.builtin.include_role:
+        name: vms
+      vars:
+        student_id: "{{ item }}"
+        state: present
+      loop: "{{ my_students }}"
+
+    - name: "Clone LXC containers for each student on {{ inventory_hostname }}"
+      ansible.builtin.include_role:
+        name: containers
+      vars:
+        student_id: "{{ item }}"
+        state: present
+      loop: "{{ my_students }}"

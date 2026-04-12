@@ -1,0 +1,59 @@
+---
+# group_vars/all.yml – Global variables for the Proxmox course automation
+# Edit these values to customise the deployment for each course run.
+
+# ---------------------------------------------------------------------------
+# Cluster topology
+# ---------------------------------------------------------------------------
+# Ordered list of node hostnames (must match inventory.ini).
+proxmox_nodes:
+  - pve1
+  - pve2
+  - pve3
+  - pve4
+  - pve5
+  - pve6
+
+num_nodes: 6   # Must match the length of proxmox_nodes
+
+# ---------------------------------------------------------------------------
+# Student settings
+# ---------------------------------------------------------------------------
+num_students: 40          # Total number of student environments to provision
+student_id_start: 1       # First student ID (inclusive)
+# Student IDs will be: student_id_start .. student_id_start + num_students - 1
+
+# ---------------------------------------------------------------------------
+# Template IDs
+# ---------------------------------------------------------------------------
+vm_template_id: 9000      # Proxmox VM template for pfSense
+ct_template_id: 8000      # Proxmox CT template for LXC containers
+
+# ---------------------------------------------------------------------------
+# VM / Container ID bases
+# ---------------------------------------------------------------------------
+base_vm_id: 1000          # Student VM  ID = base_vm_id + student_id
+base_ct_id: 2000          # Student CT  ID = base_ct_id + student_id * 10 + ct_index
+num_containers: 4         # Number of LXC containers per student (ct0 … ct3)
+
+# ---------------------------------------------------------------------------
+# Storage
+# ---------------------------------------------------------------------------
+vm_storage: local-lvm     # Storage pool for VM disks
+ct_storage: local-lvm     # Storage pool for container rootfs
+
+# ---------------------------------------------------------------------------
+# Networking
+# ---------------------------------------------------------------------------
+wan_bridge: vmbr0         # Shared WAN bridge (all students share this)
+# Per-student LAN bridge name is computed as "vmbr10<student_id>" in helpers.sh
+
+# ---------------------------------------------------------------------------
+# Roles / Permissions
+# ---------------------------------------------------------------------------
+student_role: PVEVMUser   # Proxmox role granted to each student on their pool
+
+# ---------------------------------------------------------------------------
+# Script paths (relative to the repo root, executed on remote nodes)
+# ---------------------------------------------------------------------------
+scripts_remote_dir: /opt/proxmox-course/scripts
