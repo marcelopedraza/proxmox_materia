@@ -66,8 +66,8 @@ Edit `inventory.ini` with your actual node hostnames/IPs:
 
 ```ini
 [proxmox_nodes]
-pve1 ansible_host=192.168.1.101 node_index=0
-pve2 ansible_host=192.168.1.102 node_index=1
+pve1 ansible_host=157.92.12.1 node_index=0
+pve2 ansible_host=157.92.12.2 node_index=1
 ...
 ```
 
