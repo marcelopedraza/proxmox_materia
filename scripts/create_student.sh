@@ -185,7 +185,7 @@ for i in $(seq 0 $(( NUM_CONTAINERS - 1 ))); do
         --net0 name=eth0,bridge="${LAN_BRIDGE}",ip=dhcp
 
     # Add the container to the student's resource pool
-    pct set "${CT_ID}" --pool "${POOL_NAME}"
+    pveum pool modify "${POOL_NAME}" --vms "${CT_ID}"
 
     log_info "Container ${CT_ID} (${CT_NAME}) created and added to pool ${POOL_NAME}."
 done
