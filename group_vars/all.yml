@@ -19,7 +19,7 @@ num_nodes: 6   # Must match the length of proxmox_nodes
 # ---------------------------------------------------------------------------
 # Student settings
 # ---------------------------------------------------------------------------
-num_students: 40          # Total number of student environments to provision
+num_students: 2          # Total number of student environments to provision
 student_id_start: 1       # First student ID (inclusive)
 # Student IDs will be: student_id_start .. student_id_start + num_students - 1
 
