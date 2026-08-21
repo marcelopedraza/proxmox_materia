@@ -29,8 +29,10 @@
   when: ct_status.rc != 0   # rc != 0 means the container does not exist
   changed_when: true
 
+# Not gated on ct_status.rc: always (re-)attempted so that a retry after a
+# mid-playbook failure still adds an already-cloned container to its pool,
+# instead of silently skipping it because the clone step is now a no-op.
 - name: "Add container {{ ct_id }} to pool {{ pool_name }}"
   ansible.builtin.command:
-    cmd: pct set {{ ct_id }} --pool {{ pool_name }}
-  when: ct_status.rc != 0
+    cmd: pveum pool modify {{ pool_name }} --vms {{ ct_id }}
   changed_when: true

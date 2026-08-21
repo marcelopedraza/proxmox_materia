@@ -10,13 +10,7 @@
 - name: "Include users role for student{{ student_id }}"
   ansible.builtin.include_role:
     name: users
-  vars:
-    student_id: "{{ student_id }}"
-    state: "{{ state }}"
 
 - name: "Include pools role for student{{ student_id }}"
   ansible.builtin.include_role:
     name: pools
-  vars:
-    student_id: "{{ student_id }}"
-    state: "{{ state }}"

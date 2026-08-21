@@ -13,16 +13,27 @@
       physical uplink NIC (e.g. "eno1") before the wan role can run.
   when: wan_uplink_interface | default('') | length == 0
 
+- name: "Check whether bridge {{ wan_bridge }} already exists"
+  ansible.builtin.stat:
+    path: "/sys/class/net/{{ wan_bridge }}"
+  register: wan_bridge_stat
+
+# If the bridge already exists (e.g. configured manually or by a previous
+# Proxmox install), leave it and its /etc/network/interfaces stanza alone.
+# Appending another "iface {{ wan_bridge }}" block here would create a
+# second, conflicting definition for the same interface and can break
+# networking (including this node's own management IP) on the next
+# ifreload/reboot.
 - name: "Create bridge {{ wan_bridge }} (runtime)"
   ansible.builtin.command:
     cmd: ip link add name {{ wan_bridge }} type bridge
-  args:
-    creates: "/sys/class/net/{{ wan_bridge }}"
+  when: not wan_bridge_stat.stat.exists
   changed_when: true
 
 - name: "Bring up bridge {{ wan_bridge }}"
   ansible.builtin.command:
     cmd: ip link set {{ wan_bridge }} up
+  when: not wan_bridge_stat.stat.exists
   changed_when: true
 
 - name: "Make bridge {{ wan_bridge }} persistent in /etc/network/interfaces"
@@ -35,3 +46,4 @@
           bridge-ports {{ wan_uplink_interface }}
           bridge-stp off
           bridge-fd 0
+  when: not wan_bridge_stat.stat.exists

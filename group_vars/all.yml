@@ -51,7 +51,7 @@ wan_bridge: vmbr0         # Shared WAN bridge (all students share this)
 # WAN uplink NIC on each Proxmox node, bridged into vmbr0. Same across all
 # 6 nodes. MUST be filled in with the real NIC name (e.g. "eno1") before
 # running deploy.yml / setup_wan_bridge.sh.
-wan_uplink_interface: ""
+wan_uplink_interface: "enp3s0"
 
 num_lan_networks: 3      # Number of isolated LAN bridges provisioned per pool
 base_lan_bridge_id: 100  # Bridge name = "vmbr{{ base_lan_bridge_id + student_id*10 + net_index }}"
@@ -62,6 +62,8 @@ base_lan_bridge_id: 100  # Bridge name = "vmbr{{ base_lan_bridge_id + student_id
 # ---------------------------------------------------------------------------
 student_role: StudentLab  # Custom Proxmox role granted to each student on their pool
 student_role_privileges:  # Baseline PVEVMUser privileges + snapshot management
+  - VM.Audit          # Required to see VMs/CTs in the resource tree and search
+  - Pool.Audit        # Required to see the pool itself in the resource tree
   - VM.Config.CDROM
   - VM.Config.Cloudinit
   - VM.Config.Disk
@@ -70,7 +72,6 @@ student_role_privileges:  # Baseline PVEVMUser privileges + snapshot management
   - VM.Config.Network
   - VM.Config.Options
   - VM.Console
-  - VM.Monitor
   - VM.PowerMgmt
   - VM.Snapshot
   - VM.Snapshot.Rollback

@@ -15,7 +15,7 @@
     ct_indexes: "{{ range(0, num_containers | int) | list }}"
 
 # ---- Create containers ----
-- name: "Process container {{ ct_index }} for student{{ student_id }}"
+- name: "Process container {{ ct_index | default('') }} for student{{ student_id }}"
   ansible.builtin.include_tasks: create_container.yml
   loop: "{{ ct_indexes }}"
   loop_control:
@@ -23,7 +23,7 @@
   when: state | default('present') == 'present'
 
 # ---- Delete containers ----
-- name: "Destroy container {{ ct_index }} for student{{ student_id }}"
+- name: "Destroy container {{ ct_index | default('') }} for student{{ student_id }}"
   ansible.builtin.include_tasks: destroy_container.yml
   loop: "{{ ct_indexes }}"
   loop_control:

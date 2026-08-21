@@ -14,6 +14,7 @@
 - name: "Manage LAN bridges for student{{ student_id }}"
   ansible.builtin.include_tasks: manage_bridge.yml
   vars:
-    net_index: "{{ item }}"
-    lan_bridge: "vmbr{{ base_lan_bridge_id | int + student_id | int * 10 + item | int }}"
+    lan_bridge: "vmbr{{ base_lan_bridge_id | int + student_id | int * 10 + net_index | int }}"
   loop: "{{ range(0, num_lan_networks | int) | list }}"
+  loop_control:
+    loop_var: net_index

@@ -30,6 +30,19 @@
     - "student_role not in (role_list.stdout | default(''))"
   changed_when: true
 
+# Role already exists (e.g. from a previous run): keep its privileges in
+# sync with student_role_privileges, since "role add" above only runs once
+# and would otherwise never pick up later changes to the privilege list.
+- name: "Sync privileges for existing role {{ student_role }}"
+  ansible.builtin.command:
+    cmd: >
+      pveum role modify {{ student_role }}
+      -privs "{{ student_role_privileges | join(',') }}"
+  when:
+    - state | default('present') == 'present'
+    - "student_role in (role_list.stdout | default(''))"
+  changed_when: true
+
 # ---- Create pool ----
 - name: "Check if pool {{ pool_name }} exists"
   ansible.builtin.command:

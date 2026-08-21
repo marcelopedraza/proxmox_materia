@@ -49,12 +49,13 @@
     - vm_status.rc != 0
   changed_when: true
 
+# Not gated on vm_status.rc: always (re-)attempted so that a retry after a
+# mid-playbook failure still adds an already-cloned VM to its pool, instead
+# of silently skipping it because the clone step is now a no-op.
 - name: "Add VM {{ vm_id }} to pool {{ pool_name }}"
   ansible.builtin.command:
-    cmd: qm set {{ vm_id }} --pool {{ pool_name }}
-  when:
-    - state | default('present') == 'present'
-    - vm_status.rc != 0
+    cmd: pveum pool modify {{ pool_name }} --vms {{ vm_id }}
+  when: state | default('present') == 'present'
   changed_when: true
 
 # ---- Delete VM ----
