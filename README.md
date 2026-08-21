@@ -210,6 +210,78 @@ Internet
 
 ---
 
+## Student guide
+
+This section walks a student through using their lab environment once it has
+been provisioned by the instructor. It assumes you know only your **student
+ID** (e.g. `7`) — everything else follows from it.
+
+### 1. Log in
+
+- URL: `https://<proxmox-node>:8006`
+- Username: `student<ID>@pve` (e.g. `student7@pve`)
+- Password: initially the same as your username (e.g. `student7`) —
+  **change this on first login** via the top-right user menu → "Password".
+
+You will only see your own resource pool, `student<ID>`. You cannot see
+other students' VMs, containers, or bridges.
+
+### 2. Find your resources
+
+Inside your pool you should see:
+
+| Resource | ID | Notes |
+|---|---|---|
+| pfSense VM | `1000 + ID` | Router/firewall for your lab, `net0` already wired to the shared WAN |
+| LXC containers | `2000 + ID*10 + [0-3]` | Four containers, network unwired |
+| LAN bridges | `vmbr(100 + ID*10 + [0-2])` | Three private bridges only your resources can use |
+
+For student 7: VM `1007`, containers `2070`–`2073`, bridges `vmbr170`,
+`vmbr171`, `vmbr172`.
+
+### 3. Wire your own network
+
+Nothing beyond the WAN link is connected by default — this is intentional,
+so you design the topology yourself. Typical steps:
+
+1. Open your pfSense VM → **Hardware** → add/edit `net1`, `net2`, `net3`,
+   attaching each to one of your three LAN bridges.
+2. Open each container → **Network** → set `net0` to whichever LAN bridge
+   it should live on.
+3. Start pfSense first, then your containers, then configure IP
+   addressing/DHCP on each pfSense interface and inside the containers as
+   your assignment requires.
+
+You have the `VM.Config.Network` privilege scoped to your pool, so these
+changes are allowed without instructor involvement.
+
+### 4. Snapshots
+
+Your `StudentLab` role includes `VM.Snapshot` and `VM.Snapshot.Rollback`, so
+you can checkpoint your work and roll back after a mistake:
+
+- Select a VM or container → **Snapshots** tab → **Take Snapshot** before
+  risky changes (e.g. before a firewall rule change or a package upgrade).
+- Use **Rollback** to restore a snapshot if something breaks.
+
+Snapshots are the recommended way to experiment safely — you do not need to
+ask the instructor to reset your environment for routine mistakes.
+
+### 5. Getting a clean slate
+
+If your environment becomes unusable and a snapshot rollback isn't enough,
+ask your instructor to re-run teardown/deploy for your student ID:
+
+```bash
+ansible-playbook -i inventory.ini playbooks/destroy.yml -e "student_id_start=<ID> num_students=1"
+ansible-playbook -i inventory.ini playbooks/deploy.yml  -e "student_id_start=<ID> num_students=1"
+```
+
+This is fast and only affects your own pool — it does not touch the shared
+`vmbr0` WAN bridge or any other student.
+
+---
+
 ## Notes
 
 - Scripts are **idempotent**: re-running them for the same student ID is safe.
