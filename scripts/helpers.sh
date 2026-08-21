@@ -13,7 +13,7 @@ log_error() { echo "[ERROR] $(date '+%Y-%m-%d %H:%M:%S') $*" >&2; }
 # ---------------------------------------------------------------------------
 # Configuration defaults (override via environment variables before sourcing)
 # ---------------------------------------------------------------------------
-: "${NUM_NODES:=6}"          # Number of Proxmox nodes in the cluster
+: "${NUM_NODES:=1}"          # Number of Proxmox nodes in the cluster (currently single-node)
 : "${NUM_STUDENTS:=40}"      # Total number of students
 : "${VM_TEMPLATE_ID:=9000}"  # Proxmox template ID for the pfSense VM
 : "${CT_TEMPLATE_ID:=8000}"  # Proxmox template ID for LXC containers
@@ -23,9 +23,28 @@ log_error() { echo "[ERROR] $(date '+%Y-%m-%d %H:%M:%S') $*" >&2; }
 : "${CT_STORAGE:=local-lvm}" # Storage pool used for containers
 : "${VM_STORAGE:=local-lvm}" # Storage pool used for VM disks
 : "${WAN_BRIDGE:=vmbr0}"     # Shared WAN bridge (all students share this)
+: "${WAN_UPLINK_IFACE:=}"   # Physical uplink NIC for vmbr0 (e.g. "eno1") – must be set before setup_wan_bridge.sh
+: "${NUM_LAN_NETWORKS:=3}"  # Number of isolated LAN bridges per student pool
+: "${BASE_LAN_BRIDGE_ID:=100}" # LAN bridge name = vmbr(BASE_LAN_BRIDGE_ID + student_id*10 + net_index)
 
 # Node names – adjust to match your actual Proxmox node hostnames
-: "${NODES:=pve1 pve2 pve3 pve4 pve5 pve6}"
+: "${NODES:=pve1}"
+
+# ---------------------------------------------------------------------------
+# Custom student role (StudentLab) – PVEVMUser baseline + snapshot management
+# ---------------------------------------------------------------------------
+: "${STUDENT_ROLE:=StudentLab}"
+: "${STUDENT_ROLE_PRIVS:=VM.Config.CDROM,VM.Config.Cloudinit,VM.Config.Disk,VM.Config.HWType,VM.Config.Memory,VM.Config.Network,VM.Config.Options,VM.Console,VM.Monitor,VM.PowerMgmt,VM.Snapshot,VM.Snapshot.Rollback}"
+
+# Ensure the custom StudentLab role exists (idempotent, cluster-wide/global).
+ensure_student_role() {
+    if pveum role list --output-format json 2>/dev/null | grep -q "\"${STUDENT_ROLE}\""; then
+        log_info "Role ${STUDENT_ROLE} already exists – skipping."
+    else
+        pveum role add "${STUDENT_ROLE}" -privs "${STUDENT_ROLE_PRIVS}"
+        log_info "Role ${STUDENT_ROLE} created with privileges: ${STUDENT_ROLE_PRIVS}"
+    fi
+}
 
 # ---------------------------------------------------------------------------
 # Compute derived values for a given STUDENT_ID
@@ -60,12 +79,15 @@ get_ct_id() {
     echo $(( BASE_CT_ID + student_id * 10 + ct_index ))
 }
 
-# Returns the per-student LAN bridge name.
+# Returns the per-student LAN bridge name for a given network index
+# (0 .. NUM_LAN_NETWORKS-1).
 get_lan_bridge() {
     local student_id="$1"
-    # e.g. student 1  → vmbr101
-    #      student 10 → vmbr1010
-    echo "vmbr10${student_id}"
+    local net_index="$2"
+    # e.g. student 7, index 0 → vmbr170
+    #      student 7, index 1 → vmbr171
+    #      student 7, index 2 → vmbr172
+    echo "vmbr$(( BASE_LAN_BRIDGE_ID + student_id * 10 + net_index ))"
 }
 
 # ---------------------------------------------------------------------------

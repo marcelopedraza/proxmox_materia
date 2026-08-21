@@ -37,13 +37,17 @@ STUDENT_NAME="student${STUDENT_ID}"
 PVE_USER="${STUDENT_NAME}@pve"
 POOL_NAME="${STUDENT_NAME}"
 VM_ID=$(get_vm_id "$STUDENT_ID")
-LAN_BRIDGE=$(get_lan_bridge "$STUDENT_ID")
+
+LAN_BRIDGES=()
+for n in $(seq 0 $(( NUM_LAN_NETWORKS - 1 ))); do
+    LAN_BRIDGES+=("$(get_lan_bridge "$STUDENT_ID" "$n")")
+done
 
 log_info "=== Destroying environment for ${STUDENT_NAME} ==="
-log_info "  PVE user   : ${PVE_USER}"
-log_info "  Pool       : ${POOL_NAME}"
-log_info "  VM ID      : ${VM_ID}"
-log_info "  LAN bridge : ${LAN_BRIDGE}"
+log_info "  PVE user    : ${PVE_USER}"
+log_info "  Pool        : ${POOL_NAME}"
+log_info "  VM ID       : ${VM_ID}"
+log_info "  LAN bridges : ${LAN_BRIDGES[*]}"
 
 # ---------------------------------------------------------------------------
 # Step 1 – Stop and delete LXC containers
@@ -98,9 +102,11 @@ fi
 log_info "--- Removing ACL entries for ${PVE_USER} ---"
 # pveum aclmod with an empty --roles string effectively removes the entry.
 # We ignore errors in case the user or pool is already gone.
+# Note: only the per-student ACL grant is revoked here. The StudentLab role
+# itself is global/shared across all students and is never deleted.
 pveum aclmod "/pool/${POOL_NAME}" \
     --users "${PVE_USER}" \
-    --roles PVEVMUser \
+    --roles "${STUDENT_ROLE}" \
     --delete 1 2>/dev/null || true
 log_info "ACL entries removed (if any)."
 
@@ -129,31 +135,33 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Step 6 – Remove the LAN bridge
+# Step 6 – Remove the LAN bridges
 # ---------------------------------------------------------------------------
-log_info "--- Removing LAN bridge ${LAN_BRIDGE} ---"
+log_info "--- Removing ${NUM_LAN_NETWORKS} LAN bridges ---"
 
-if ip link show "${LAN_BRIDGE}" &>/dev/null; then
-    ip link set "${LAN_BRIDGE}" down
-    ip link delete "${LAN_BRIDGE}" type bridge
-    log_info "Bridge ${LAN_BRIDGE} removed from the system."
-else
-    log_info "Bridge ${LAN_BRIDGE} does not exist – skipping."
-fi
+for LAN_BRIDGE in "${LAN_BRIDGES[@]}"; do
+    if ip link show "${LAN_BRIDGE}" &>/dev/null; then
+        ip link set "${LAN_BRIDGE}" down
+        ip link delete "${LAN_BRIDGE}" type bridge
+        log_info "Bridge ${LAN_BRIDGE} removed from the system."
+    else
+        log_info "Bridge ${LAN_BRIDGE} does not exist – skipping."
+    fi
 
-# Remove the stanza from /etc/network/interfaces so the bridge is not
-# re-created on next boot.
-# The stanza is delimited by unique begin/end markers that include both the
-# student ID and bridge name, preventing accidental removal of other entries.
-BEGIN_MARKER="# BEGIN student${STUDENT_ID} ${LAN_BRIDGE}"
-END_MARKER="# END student${STUDENT_ID} ${LAN_BRIDGE}"
+    # Remove the stanza from /etc/network/interfaces so the bridge is not
+    # re-created on next boot.
+    # The stanza is delimited by unique begin/end markers that include both the
+    # student ID and bridge name, preventing accidental removal of other entries.
+    BEGIN_MARKER="# BEGIN student${STUDENT_ID} ${LAN_BRIDGE}"
+    END_MARKER="# END student${STUDENT_ID} ${LAN_BRIDGE}"
 
-if grep -qF "${BEGIN_MARKER}" /etc/network/interfaces; then
-    sed -i "/^${BEGIN_MARKER}$/,/^${END_MARKER}$/d" /etc/network/interfaces
-    # Remove blank lines that may have been left behind (consecutive empty lines only)
-    sed -i '/^$/N;/^\n$/d' /etc/network/interfaces
-    log_info "Bridge ${LAN_BRIDGE} removed from /etc/network/interfaces."
-fi
+    if grep -qF "${BEGIN_MARKER}" /etc/network/interfaces; then
+        sed -i "/^${BEGIN_MARKER}$/,/^${END_MARKER}$/d" /etc/network/interfaces
+        # Remove blank lines that may have been left behind (consecutive empty lines only)
+        sed -i '/^$/N;/^\n$/d' /etc/network/interfaces
+        log_info "Bridge ${LAN_BRIDGE} removed from /etc/network/interfaces."
+    fi
+done
 
 # ---------------------------------------------------------------------------
 # Done

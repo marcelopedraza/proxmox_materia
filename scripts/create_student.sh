@@ -38,13 +38,18 @@ PVE_USER="${STUDENT_NAME}@pve"                 # e.g. student3@pve
 POOL_NAME="${STUDENT_NAME}"                    # resource pool name
 VM_ID=$(get_vm_id "$STUDENT_ID")               # e.g. 1003
 VM_NAME="${STUDENT_NAME}-pfsense"              # e.g. student3-pfsense
-LAN_BRIDGE=$(get_lan_bridge "$STUDENT_ID")     # e.g. vmbr103
+
+# Compute the list of LAN bridge names for this student (e.g. vmbr130..132).
+LAN_BRIDGES=()
+for n in $(seq 0 $(( NUM_LAN_NETWORKS - 1 ))); do
+    LAN_BRIDGES+=("$(get_lan_bridge "$STUDENT_ID" "$n")")
+done
 
 log_info "=== Creating environment for ${STUDENT_NAME} ==="
-log_info "  PVE user   : ${PVE_USER}"
-log_info "  Pool       : ${POOL_NAME}"
-log_info "  VM ID      : ${VM_ID}  (${VM_NAME})"
-log_info "  LAN bridge : ${LAN_BRIDGE}"
+log_info "  PVE user    : ${PVE_USER}"
+log_info "  Pool        : ${POOL_NAME}"
+log_info "  VM ID       : ${VM_ID}  (${VM_NAME})"
+log_info "  LAN bridges : ${LAN_BRIDGES[*]}"
 
 # ---------------------------------------------------------------------------
 # Step 1 – Validate templates exist
@@ -95,34 +100,42 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Step 4 – Assign permissions: PVEVMUser on the student pool
+# Step 4 – Assign permissions: StudentLab role on the student pool
 # ---------------------------------------------------------------------------
+log_info "--- Ensuring custom role ${STUDENT_ROLE} exists ---"
+ensure_student_role
+
 log_info "--- Assigning permissions ---"
 pveum aclmod "/pool/${POOL_NAME}" \
     --users "${PVE_USER}" \
-    --roles PVEVMUser
-log_info "Permissions set: ${PVE_USER} → PVEVMUser on /pool/${POOL_NAME}"
+    --roles "${STUDENT_ROLE}"
+log_info "Permissions set: ${PVE_USER} → ${STUDENT_ROLE} on /pool/${POOL_NAME}"
 
 # ---------------------------------------------------------------------------
-# Step 5 – Create per-student LAN bridge (idempotent via ip link check)
+# Step 5 – Create per-student LAN bridges (idempotent via ip link check)
+#
+# These bridges are NOT auto-wired to pfSense or the containers. Students
+# attach them manually via Proxmox/pfSense using the VM.Config.Network
+# privilege their role already grants.
 # ---------------------------------------------------------------------------
-log_info "--- Creating LAN bridge ${LAN_BRIDGE} ---"
+log_info "--- Creating ${NUM_LAN_NETWORKS} LAN bridges ---"
 
-if ip link show "${LAN_BRIDGE}" &>/dev/null; then
-    log_info "Bridge ${LAN_BRIDGE} already exists – skipping creation."
-else
-    # Create the bridge interface and bring it up
-    ip link add name "${LAN_BRIDGE}" type bridge
-    ip link set "${LAN_BRIDGE}" up
-    log_info "Bridge ${LAN_BRIDGE} created and brought up."
-fi
+for LAN_BRIDGE in "${LAN_BRIDGES[@]}"; do
+    if ip link show "${LAN_BRIDGE}" &>/dev/null; then
+        log_info "Bridge ${LAN_BRIDGE} already exists – skipping creation."
+    else
+        # Create the bridge interface and bring it up
+        ip link add name "${LAN_BRIDGE}" type bridge
+        ip link set "${LAN_BRIDGE}" up
+        log_info "Bridge ${LAN_BRIDGE} created and brought up."
+    fi
 
-# Make bridge persistent by appending to /etc/network/interfaces if not present.
-# We use unique begin/end markers (including both student ID and bridge name)
-# so the block can be reliably identified and removed later by destroy_student.sh.
-BEGIN_MARKER="# BEGIN student${STUDENT_ID} ${LAN_BRIDGE}"
-if ! grep -qF "${BEGIN_MARKER}" /etc/network/interfaces; then
-    cat >> /etc/network/interfaces <<EOF
+    # Make bridge persistent by appending to /etc/network/interfaces if not present.
+    # We use unique begin/end markers (including both student ID and bridge name)
+    # so the block can be reliably identified and removed later by destroy_student.sh.
+    BEGIN_MARKER="# BEGIN student${STUDENT_ID} ${LAN_BRIDGE}"
+    if ! grep -qF "${BEGIN_MARKER}" /etc/network/interfaces; then
+        cat >> /etc/network/interfaces <<EOF
 
 # BEGIN student${STUDENT_ID} ${LAN_BRIDGE}
 auto ${LAN_BRIDGE}
@@ -132,8 +145,9 @@ iface ${LAN_BRIDGE} inet manual
     bridge-fd 0
 # END student${STUDENT_ID} ${LAN_BRIDGE}
 EOF
-    log_info "Bridge ${LAN_BRIDGE} added to /etc/network/interfaces."
-fi
+        log_info "Bridge ${LAN_BRIDGE} added to /etc/network/interfaces."
+    fi
+done
 
 # ---------------------------------------------------------------------------
 # Step 6 – Clone pfSense VM from template
@@ -148,12 +162,10 @@ else
         --full 1 \
         --storage "${VM_STORAGE}"
 
-    # Configure network interfaces:
-    #   net0 = WAN  → shared bridge vmbr0
-    #   net1 = LAN  → per-student bridge
+    # Configure the WAN interface only. Students wire net1/net2/net3 to
+    # whichever of their LAN bridges they choose, themselves.
     qm set "${VM_ID}" \
-        --net0 virtio,bridge="${WAN_BRIDGE}" \
-        --net1 virtio,bridge="${LAN_BRIDGE}"
+        --net0 virtio,bridge="${WAN_BRIDGE}"
 
     # Add the VM to the student's resource pool
     qm set "${VM_ID}" --pool "${POOL_NAME}"
@@ -180,9 +192,8 @@ for i in $(seq 0 $(( NUM_CONTAINERS - 1 ))); do
         --storage "${CT_STORAGE}" \
         --full 1
 
-    # Connect the container to the student LAN bridge
-    pct set "${CT_ID}" \
-        --net0 name=eth0,bridge="${LAN_BRIDGE}",ip=dhcp
+    # Container is created without a pre-wired net0. Students attach it to
+    # whichever of their LAN bridges they choose, themselves.
 
     # Add the container to the student's resource pool
     pveum pool modify "${POOL_NAME}" --vms "${CT_ID}"
