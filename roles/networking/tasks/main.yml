@@ -1,62 +1,19 @@
 ---
 # roles/networking/tasks/main.yml
-# Create (or delete) a per-student LAN bridge on the target Proxmox node.
-# The bridge name follows the pattern "vmbr10<student_id>".
+# Create (or delete) the per-student LAN bridges on the target Proxmox node.
+# Each student gets `num_lan_networks` isolated bridges, named
+# "vmbr{{ base_lan_bridge_id + student_id*10 + net_index }}".
+#
+# These bridges are NOT auto-wired to pfSense or the containers — students
+# attach them manually using the VM.Config.Network privilege on their role.
 #
 # Expected variables:
 #   student_id   – integer student identifier
 #   state        – "present" (default) or "absent"
 
-- name: "Set networking facts for student{{ student_id }}"
-  ansible.builtin.set_fact:
-    lan_bridge: "vmbr10{{ student_id }}"
-
-# ---- Create bridge ----
-- name: "Create bridge {{ lan_bridge }} (runtime)"
-  ansible.builtin.command:
-    cmd: ip link add name {{ lan_bridge }} type bridge
-  args:
-    creates: "/sys/class/net/{{ lan_bridge }}"
-  when: state | default('present') == 'present'
-  changed_when: true
-
-- name: "Bring up bridge {{ lan_bridge }}"
-  ansible.builtin.command:
-    cmd: ip link set {{ lan_bridge }} up
-  when: state | default('present') == 'present'
-  changed_when: true
-
-- name: "Make bridge {{ lan_bridge }} persistent in /etc/network/interfaces"
-  ansible.builtin.blockinfile:
-    path: /etc/network/interfaces
-    marker: "# {mark} ANSIBLE MANAGED BLOCK student{{ student_id }} bridge"
-    block: |
-      auto {{ lan_bridge }}
-      iface {{ lan_bridge }} inet manual
-          bridge-ports none
-          bridge-stp off
-          bridge-fd 0
-  when: state | default('present') == 'present'
-
-# ---- Delete bridge ----
-- name: "Bring down bridge {{ lan_bridge }}"
-  ansible.builtin.command:
-    cmd: ip link set {{ lan_bridge }} down
-  when: state | default('present') == 'absent'
-  failed_when: false
-  changed_when: true
-
-- name: "Delete bridge {{ lan_bridge }}"
-  ansible.builtin.command:
-    cmd: ip link delete {{ lan_bridge }} type bridge
-  when: state | default('present') == 'absent'
-  failed_when: false
-  changed_when: true
-
-- name: "Remove bridge {{ lan_bridge }} from /etc/network/interfaces"
-  ansible.builtin.blockinfile:
-    path: /etc/network/interfaces
-    marker: "# {mark} ANSIBLE MANAGED BLOCK student{{ student_id }} bridge"
-    block: ""
-    state: absent
-  when: state | default('present') == 'absent'
+- name: "Manage LAN bridges for student{{ student_id }}"
+  ansible.builtin.include_tasks: manage_bridge.yml
+  vars:
+    net_index: "{{ item }}"
+    lan_bridge: "vmbr{{ base_lan_bridge_id | int + student_id | int * 10 + item | int }}"
+  loop: "{{ range(0, num_lan_networks | int) | list }}"

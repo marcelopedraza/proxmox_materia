@@ -1,0 +1,59 @@
+---
+# roles/networking/tasks/manage_bridge.yml
+# Create (or delete) a single LAN bridge. Included in a loop from main.yml.
+#
+# Expected variables:
+#   student_id   – integer student identifier
+#   net_index    – integer network index (0 .. num_lan_networks-1)
+#   lan_bridge   – computed bridge name
+#   state        – "present" (default) or "absent"
+
+# ---- Create bridge ----
+- name: "Create bridge {{ lan_bridge }} (runtime)"
+  ansible.builtin.command:
+    cmd: ip link add name {{ lan_bridge }} type bridge
+  args:
+    creates: "/sys/class/net/{{ lan_bridge }}"
+  when: state | default('present') == 'present'
+  changed_when: true
+
+- name: "Bring up bridge {{ lan_bridge }}"
+  ansible.builtin.command:
+    cmd: ip link set {{ lan_bridge }} up
+  when: state | default('present') == 'present'
+  changed_when: true
+
+- name: "Make bridge {{ lan_bridge }} persistent in /etc/network/interfaces"
+  ansible.builtin.blockinfile:
+    path: /etc/network/interfaces
+    marker: "# {mark} ANSIBLE MANAGED BLOCK student{{ student_id }} net{{ net_index }} {{ lan_bridge }}"
+    block: |
+      auto {{ lan_bridge }}
+      iface {{ lan_bridge }} inet manual
+          bridge-ports none
+          bridge-stp off
+          bridge-fd 0
+  when: state | default('present') == 'present'
+
+# ---- Delete bridge ----
+- name: "Bring down bridge {{ lan_bridge }}"
+  ansible.builtin.command:
+    cmd: ip link set {{ lan_bridge }} down
+  when: state | default('present') == 'absent'
+  failed_when: false
+  changed_when: true
+
+- name: "Delete bridge {{ lan_bridge }}"
+  ansible.builtin.command:
+    cmd: ip link delete {{ lan_bridge }} type bridge
+  when: state | default('present') == 'absent'
+  failed_when: false
+  changed_when: true
+
+- name: "Remove bridge {{ lan_bridge }} from /etc/network/interfaces"
+  ansible.builtin.blockinfile:
+    path: /etc/network/interfaces
+    marker: "# {mark} ANSIBLE MANAGED BLOCK student{{ student_id }} net{{ net_index }} {{ lan_bridge }}"
+    block: ""
+    state: absent
+  when: state | default('present') == 'absent'

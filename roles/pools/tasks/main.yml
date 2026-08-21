@@ -12,6 +12,24 @@
     pve_user: "student{{ student_id }}@pve"
     pool_name: "student{{ student_id }}"
 
+# ---- Ensure custom student role exists (global, shared across all pools) ----
+- name: "Check if role {{ student_role }} exists"
+  ansible.builtin.command:
+    cmd: pveum role list --output-format json
+  register: role_list
+  changed_when: false
+  when: state | default('present') == 'present'
+
+- name: "Create custom role {{ student_role }} with snapshot privileges"
+  ansible.builtin.command:
+    cmd: >
+      pveum role add {{ student_role }}
+      -privs "{{ student_role_privileges | join(',') }}"
+  when:
+    - state | default('present') == 'present'
+    - "student_role not in (role_list.stdout | default(''))"
+  changed_when: true
+
 # ---- Create pool ----
 - name: "Check if pool {{ pool_name }} exists"
   ansible.builtin.command:

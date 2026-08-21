@@ -2,6 +2,10 @@
 # roles/containers/tasks/create_container.yml
 # Creates a single LXC container for the current ct_index.
 # Called in a loop from main.yml.
+#
+# Containers are created without a pre-wired net0. Students attach each
+# container's net0 to whichever of their pool's LAN bridges they choose,
+# using the VM.Config.Network privilege their role already grants.
 
 - name: "Set facts for container index {{ ct_index }}"
   ansible.builtin.set_fact:
@@ -23,14 +27,6 @@
       --storage {{ ct_storage }}
       --full 1
   when: ct_status.rc != 0   # rc != 0 means the container does not exist
-  changed_when: true
-
-- name: "Configure network on container {{ ct_id }}"
-  ansible.builtin.command:
-    cmd: >
-      pct set {{ ct_id }}
-      --net0 name=eth0,bridge={{ lan_bridge }},ip=dhcp
-  when: ct_status.rc != 0
   changed_when: true
 
 - name: "Add container {{ ct_id }} to pool {{ pool_name }}"

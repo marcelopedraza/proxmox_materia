@@ -2,6 +2,10 @@
 # roles/vms/tasks/main.yml
 # Clone (or destroy) the pfSense VM for a student from the shared template.
 #
+# The VM is created with only its WAN interface (net0) wired up. Students
+# attach net1/net2/net3 to whichever of their pool's LAN bridges they choose,
+# using the VM.Config.Network privilege their role already grants.
+#
 # Expected variables:
 #   student_id      – integer student identifier
 #   state           – "present" (default) or "absent"
@@ -13,7 +17,6 @@
     vm_id: "{{ base_vm_id | int + student_id | int }}"
     vm_name: "student{{ student_id }}-pfsense"
     pool_name: "student{{ student_id }}"
-    lan_bridge: "vmbr10{{ student_id }}"
 
 # ---- Create VM ----
 - name: "Check if VM {{ vm_id }} already exists"
@@ -36,12 +39,11 @@
     - vm_status.rc != 0   # rc != 0 means the VM does not exist yet
   changed_when: true
 
-- name: "Configure network interfaces on VM {{ vm_id }}"
+- name: "Configure WAN interface on VM {{ vm_id }}"
   ansible.builtin.command:
     cmd: >
       qm set {{ vm_id }}
       --net0 virtio,bridge={{ wan_bridge }}
-      --net1 virtio,bridge={{ lan_bridge }}
   when:
     - state | default('present') == 'present'
     - vm_status.rc != 0

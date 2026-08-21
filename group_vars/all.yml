@@ -6,15 +6,17 @@
 # Cluster topology
 # ---------------------------------------------------------------------------
 # Ordered list of node hostnames (must match inventory.ini).
+# Currently a single node. Add hostnames here (and to inventory.ini) to grow
+# back to a multi-node cluster later.
 proxmox_nodes:
   - pve1
-  - pve2
-  - pve3
-  - pve4
-  - pve5
-  - pve6
+  #- pve2
+  #- pve3
+  #- pve4
+  #- pve5
+  #- pve6
 
-num_nodes: 6   # Must match the length of proxmox_nodes
+num_nodes: 1   # Must match the length of proxmox_nodes (uncommented entries above)
 
 # ---------------------------------------------------------------------------
 # Student settings
@@ -46,12 +48,32 @@ ct_storage: local-lvm     # Storage pool for container rootfs
 # Networking
 # ---------------------------------------------------------------------------
 wan_bridge: vmbr0         # Shared WAN bridge (all students share this)
-# Per-student LAN bridge name is computed as "vmbr10<student_id>" in helpers.sh
+# WAN uplink NIC on each Proxmox node, bridged into vmbr0. Same across all
+# 6 nodes. MUST be filled in with the real NIC name (e.g. "eno1") before
+# running deploy.yml / setup_wan_bridge.sh.
+wan_uplink_interface: ""
+
+num_lan_networks: 3      # Number of isolated LAN bridges provisioned per pool
+base_lan_bridge_id: 100  # Bridge name = "vmbr{{ base_lan_bridge_id + student_id*10 + net_index }}"
+# e.g. student 7 → vmbr170, vmbr171, vmbr172
 
 # ---------------------------------------------------------------------------
 # Roles / Permissions
 # ---------------------------------------------------------------------------
-student_role: PVEVMUser   # Proxmox role granted to each student on their pool
+student_role: StudentLab  # Custom Proxmox role granted to each student on their pool
+student_role_privileges:  # Baseline PVEVMUser privileges + snapshot management
+  - VM.Config.CDROM
+  - VM.Config.Cloudinit
+  - VM.Config.Disk
+  - VM.Config.HWType
+  - VM.Config.Memory
+  - VM.Config.Network
+  - VM.Config.Options
+  - VM.Console
+  - VM.Monitor
+  - VM.PowerMgmt
+  - VM.Snapshot
+  - VM.Snapshot.Rollback
 
 # ---------------------------------------------------------------------------
 # Script paths (relative to the repo root, executed on remote nodes)

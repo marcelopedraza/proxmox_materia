@@ -12,7 +12,6 @@
 - name: "Set container facts for student{{ student_id }}"
   ansible.builtin.set_fact:
     pool_name: "student{{ student_id }}"
-    lan_bridge: "vmbr10{{ student_id }}"
     ct_indexes: "{{ range(0, num_containers | int) | list }}"
 
 # ---- Create containers ----

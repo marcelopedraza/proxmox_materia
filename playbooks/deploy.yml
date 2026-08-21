@@ -47,6 +47,10 @@
     state: present
 
   tasks:
+    - name: "Ensure WAN bridge {{ wan_bridge }} exists on {{ inventory_hostname }}"
+      ansible.builtin.include_role:
+        name: wan
+
     # Compute the list of student IDs whose node_index matches this host.
     - name: "Compute student list for {{ inventory_hostname }} (node_index={{ node_index }})"
       ansible.builtin.set_fact:

@@ -1,0 +1,37 @@
+---
+# roles/wan/tasks/main.yml
+# Ensure the shared WAN bridge (vmbr0) exists on this node, bridged to the
+# node's physical uplink NIC. Runs once per node — NOT per student — since
+# vmbr0 is shared cluster infrastructure used by every student's pool.
+#
+# Uses group_vars: wan_bridge, wan_uplink_interface
+
+- name: "Fail if wan_uplink_interface is not configured"
+  ansible.builtin.fail:
+    msg: >-
+      group_vars/all.yml: wan_uplink_interface must be set to the node's
+      physical uplink NIC (e.g. "eno1") before the wan role can run.
+  when: wan_uplink_interface | default('') | length == 0
+
+- name: "Create bridge {{ wan_bridge }} (runtime)"
+  ansible.builtin.command:
+    cmd: ip link add name {{ wan_bridge }} type bridge
+  args:
+    creates: "/sys/class/net/{{ wan_bridge }}"
+  changed_when: true
+
+- name: "Bring up bridge {{ wan_bridge }}"
+  ansible.builtin.command:
+    cmd: ip link set {{ wan_bridge }} up
+  changed_when: true
+
+- name: "Make bridge {{ wan_bridge }} persistent in /etc/network/interfaces"
+  ansible.builtin.blockinfile:
+    path: /etc/network/interfaces
+    marker: "# {mark} ANSIBLE MANAGED BLOCK wan bridge {{ wan_bridge }}"
+    block: |
+      auto {{ wan_bridge }}
+      iface {{ wan_bridge }} inet manual
+          bridge-ports {{ wan_uplink_interface }}
+          bridge-stp off
+          bridge-fd 0
