@@ -27,6 +27,11 @@
   changed_when: false
   when: state | default('present') == 'present'
 
+# Templates live on local (non-shared) storage, so the clone must run FROM
+# the node that actually holds template {{ vm_template_id }} (template_node),
+# targeting this node by its real Proxmox node name — a local "qm clone" run
+# on this node would fail with "unable to find configuration file for VM
+# {{ vm_template_id }}" whenever this node isn't template_node.
 - name: "Clone pfSense VM from template {{ vm_template_id }} → {{ vm_id }}"
   ansible.builtin.command:
     cmd: >
@@ -34,6 +39,8 @@
       --name {{ vm_name }}
       --full 1
       --storage {{ vm_storage }}
+      {{ '' if inventory_hostname == template_node else '--target ' + pve_node_name }}
+  delegate_to: "{{ template_node }}"
   when:
     - state | default('present') == 'present'
     - vm_status.rc != 0   # rc != 0 means the VM does not exist yet

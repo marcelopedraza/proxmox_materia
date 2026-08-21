@@ -31,6 +31,12 @@ student_id_start: 1       # First student ID (inclusive)
 vm_template_id: 9000      # Proxmox VM template for pfSense
 ct_template_id: 8000      # Proxmox CT template for LXC containers
 
+# Inventory alias of the node holding the templates above. Templates live on
+# local (non-shared) storage, so cloning onto a different node must be a
+# cross-node "remote clone" (qm/pct clone --target <node>) run FROM this
+# node, rather than a local clone run on the target node itself.
+template_node: pve1
+
 # ---------------------------------------------------------------------------
 # VM / Container ID bases
 # ---------------------------------------------------------------------------

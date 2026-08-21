@@ -19,6 +19,10 @@
   failed_when: false
   changed_when: false
 
+# Templates live on local (non-shared) storage, so the clone must run FROM
+# the node that actually holds template {{ ct_template_id }} (template_node),
+# targeting this node by its real Proxmox node name — see the analogous
+# comment in roles/vms/tasks/main.yml.
 - name: "Clone LXC container from template {{ ct_template_id }} → {{ ct_id }}"
   ansible.builtin.command:
     cmd: >
@@ -26,6 +30,8 @@
       --hostname {{ ct_name }}
       --storage {{ ct_storage }}
       --full 1
+      {{ '' if inventory_hostname == template_node else '--target ' + pve_node_name }}
+  delegate_to: "{{ template_node }}"
   when: ct_status.rc != 0   # rc != 0 means the container does not exist
   changed_when: true
 
