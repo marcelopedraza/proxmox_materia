@@ -35,4 +35,8 @@
 - name: "Add container {{ ct_id }} to pool {{ pool_name }}"
   ansible.builtin.command:
     cmd: pveum pool modify {{ pool_name }} --vms {{ ct_id }}
-  changed_when: true
+  register: pool_add_ct
+  failed_when:
+    - pool_add_ct.rc != 0
+    - "'already a pool member' not in pool_add_ct.stderr"
+  changed_when: pool_add_ct.rc == 0

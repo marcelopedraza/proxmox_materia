@@ -10,13 +10,13 @@
 # back to a multi-node cluster later.
 proxmox_nodes:
   - pve1
-  #- pve2
-  #- pve3
-  #- pve4
-  #- pve5
-  #- pve6
+  - pve2
+  - pve3
+  - pve4
+  - pve5
+  - pve6
 
-num_nodes: 1   # Must match the length of proxmox_nodes (uncommented entries above)
+num_nodes: 6   # Must match the length of proxmox_nodes (uncommented entries above)
 
 # ---------------------------------------------------------------------------
 # Student settings
@@ -64,6 +64,7 @@ student_role: StudentLab  # Custom Proxmox role granted to each student on their
 student_role_privileges:  # Baseline PVEVMUser privileges + snapshot management
   - VM.Audit          # Required to see VMs/CTs in the resource tree and search
   - Pool.Audit        # Required to see the pool itself in the resource tree
+  - Sys.Audit         # Required to list node bridges in the network device dropdown
   - VM.Config.CDROM
   - VM.Config.Cloudinit
   - VM.Config.Disk

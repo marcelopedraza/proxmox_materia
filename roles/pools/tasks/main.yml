@@ -70,11 +70,35 @@
   when: state | default('present') == 'present'
   changed_when: true
 
+# Bridge visibility (the network-device dropdown when editing a VM/CT) comes
+# from GET /nodes/{node}/network, which needs Sys.Audit on /nodes — the pool
+# ACL above doesn't cover it, so without this grant students can manage their
+# VMs but never see any bridges to attach.
+- name: "Grant {{ student_role }} on /nodes to {{ pve_user }} (bridge visibility)"
+  ansible.builtin.command:
+    cmd: >
+      pveum aclmod /nodes
+      --users {{ pve_user }}
+      --roles {{ student_role }}
+  when: state | default('present') == 'present'
+  changed_when: true
+
 # ---- Delete pool ----
 - name: "Remove ACL for {{ pve_user }} on /pool/{{ pool_name }}"
   ansible.builtin.command:
     cmd: >
       pveum aclmod /pool/{{ pool_name }}
+      --users {{ pve_user }}
+      --roles {{ student_role }}
+      --delete 1
+  when: state | default('present') == 'absent'
+  failed_when: false
+  changed_when: true
+
+- name: "Remove ACL for {{ pve_user }} on /nodes"
+  ansible.builtin.command:
+    cmd: >
+      pveum aclmod /nodes
       --users {{ pve_user }}
       --roles {{ student_role }}
       --delete 1

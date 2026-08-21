@@ -56,7 +56,11 @@
   ansible.builtin.command:
     cmd: pveum pool modify {{ pool_name }} --vms {{ vm_id }}
   when: state | default('present') == 'present'
-  changed_when: true
+  register: pool_add_vm
+  failed_when:
+    - pool_add_vm.rc != 0
+    - "'already a pool member' not in pool_add_vm.stderr"
+  changed_when: pool_add_vm.rc == 0
 
 # ---- Delete VM ----
 - name: "Stop VM {{ vm_id }} if running"
